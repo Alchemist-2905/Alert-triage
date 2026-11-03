@@ -1,0 +1,2 @@
+{"id":"1730000000.1","timestamp":"2026-10-31T10:00:05Z","rule":{"level":10,"description":"sshd: multiple authentication failures","groups":["authentication_failures"]},"agent":{"name":"web01","ip":"10.0.0.9"},"data":{"srcip":"185.10.0.1","dstuser":"root"}}
+{"id":"1730000000.2","timestamp":"2026-10-31T10:00:09Z","rule":{"level":3,"description":"User logged in","groups":["authentication_success"]},"agent":{"name":"hr-pc-04","ip":"10.0.0.31"},"data":{"srcip":"10.0.0.31","dstuser":"alice"}}

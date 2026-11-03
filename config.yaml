@@ -1,0 +1,24 @@
+# Edit to tune the triage engine. Anything omitted falls back to the defaults in alert_triage/config.py
+window: 5min            # temporal-correlation window (repeats, scans, bursts)
+context_window: 30min   # provenance-graph window (keep equal to live.window_minutes)
+
+# Risk = 100 x (w1*severity + w2*context + w3*temporal + w4*ML confidence)
+weights: {severity: 0.10, context: 0.20, temporal: 0.10, ml: 0.60}
+context_mix: {provenance: 0.5, rules: 0.5}
+
+# Priority bands:  Low 0-30 | Medium 31-70 | High 71-85 | Critical 86-100
+thresholds: {medium: 31, high: 71, critical: 86}
+
+suspicious_ports: [23, 445, 1433, 3389, 4444, 5900, 5985, 6667, 31337]
+ioc_file: data/ioc_ips.txt     # one known-bad IP per line (threat-intel feed export)
+ioc_ips: []
+
+rules:
+  scan_distinct_ports: 15
+  scan_distinct_hosts: 10
+  bruteforce_alerts: 10
+  multistage_categories: 3
+  repeat_offender_alerts: 50
+
+model: {n_estimators: 200, min_samples_leaf: 2, random_state: 42}
+live: {window_minutes: 30, max_buffer: 8000, batch_interval: 2.0, max_batch: 2000}

@@ -1,0 +1,10 @@
+services:
+  dashboard:
+    build: .
+    ports: ["8501:8501"]
+    volumes: ["./output:/app/output"]
+  live-engine:
+    build: .
+    command: ["python", "main.py", "live", "--watch", "data/live/alerts.jsonl", "--http-port", "8080"]
+    ports: ["8080:8080"]
+    volumes: ["./output:/app/output", "./data/live:/app/data/live"]

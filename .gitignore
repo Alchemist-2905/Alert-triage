@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.streamlit/
+# generated artefacts (recreate with `python main.py demo`)
+output/*
+!output/.gitkeep
+models/*.joblib
+data/synthetic_alerts.csv
+data/live/*.jsonl
+data/unsw/
+*.db
+*.db-wal
+*.db-shm
+.DS_Store
