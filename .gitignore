@@ -1,10 +1,46 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Environments & Virtual Environments
 .venv/
 venv/
+env/
+ENV/
+
+# Testing & Coverage
 .pytest_cache/
+.coverage
+htmlcov/
+
+# IDEs & Code Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets, Credentials & Local Environments
+.env
+.env.*
+*.key
+*.pem
+
+# Temporary & Redundant Backup Files
+*_backup.py
+*.bak
+*.tmp
+
+# Streamlit internal state
 .streamlit/
-# generated artefacts (recreate with `python main.py demo`)
+
+# Generated Pipeline Artefacts & Data Buffers (recreate with `python main.py demo`)
 output/*
 !output/.gitkeep
 models/*.joblib
@@ -14,4 +50,3 @@ data/unsw/
 *.db
 *.db-wal
 *.db-shm
-.DS_Store

@@ -1,0 +1,31 @@
+# Auto detect text files and perform LF normalization on commit
+* text=auto
+
+# Shell scripts must always use LF line endings across all platforms
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Windows command and batch files require CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Source code & documentation
+*.py text eol=lf
+*.md text
+*.yaml text
+*.yml text
+*.json text
+*.txt text
+*.ini text
+
+# Binary assets (prevent git diff and line ending translation)
+*.docx binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.joblib binary
+*.db binary
+*.db-wal binary
+*.db-shm binary

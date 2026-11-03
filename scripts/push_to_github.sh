@@ -1,14 +1,35 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/push_to_github.sh https://github.com/<you>/<repo>.git
-# Create an EMPTY repo on github.com first (no README/licence), then run this once.
+# Usage: ./scripts/push_to_github.sh [https://github.com/<you>/<repo>.git]
 set -e
 cd "$(dirname "$0")/.."
-REPO_URL="${1:?Pass your GitHub repo URL, e.g. https://github.com/you/ai-alert-triage.git}"
+
 [ -d .git ] || git init -b main
+
+# If URL argument is provided, safely configure or update origin
+if [ -n "$1" ]; then
+    if git remote get-url origin >/dev/null 2>&1; then
+        git remote set-url origin "$1"
+    else
+        git remote add origin "$1"
+    fi
+    echo "[git] Remote origin set to $1"
+fi
+
+# Check that origin exists
+if ! git remote get-url origin >/dev/null 2>&1; then
+    echo "[error] No remote 'origin' configured."
+    echo "Usage: ./scripts/push_to_github.sh https://github.com/<you>/<repo>.git"
+    exit 1
+fi
+
 git add -A
-git commit -m "AI-based cyber incident prioritization and risk-aware alert triage" || echo "(nothing new to commit)"
+if ! git diff --cached --quiet; then
+    git commit -m "update: automated telemetry engine and documentation sync"
+else
+    echo "[git] No changes to commit."
+fi
+
 git branch -M main
-git remote remove origin 2>/dev/null || true
-git remote add origin "$REPO_URL"
+echo "[git] Pushing to GitHub (origin main)..."
 git push -u origin main
-echo "Pushed. CI will run automatically under the repo's Actions tab."
+echo "[git] Pushed successfully. CI will run under Actions tab."
