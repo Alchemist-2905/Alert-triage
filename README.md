@@ -20,11 +20,11 @@
 * **Project Guide & Supervisor:** **Ms. Megharani H. M.**, Assistant Professor, Dept. of CSE, MSRUAS
 
 ### Project Investigators (Team Alpha)
-| Name | University Registration No. | GitHub Profile |
-| :--- | :---: | :---: |
-| **Anoop K** | `23ETCS002014` | [@Alchemist-2905](https://github.com/Alchemist-2905) |
-| **Karan S** | `23ETCS002055` | `23ETCS002055` |
-| **Kishen G Raj** | `23ETCS002060` | `23ETCS002060` |
+| Name | University Registration No. 
+| :--- | :---: | 
+| **Anoop K** | `23ETCS002014` 
+| **Karan S** | `23ETCS002055` 
+| **Kishen G Raj** | `23ETCS002060` 
 
 ---
 
