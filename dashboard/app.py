@@ -15,8 +15,10 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
+import json
 import random
 import streamlit as st
+import streamlit.components.v1 as components
 from datetime import datetime, UTC, timedelta
 
 from alert_triage.config import load_config
@@ -63,6 +65,250 @@ def inject_simulated_alerts(count: int = 150, db_target: str = "live.db") -> int
     target_store.close()
     return len(fresh)
 
+
+def render_interactive_vis_graph(sub: nx.DiGraph, root_entity: str, height: int = 620) -> str:
+    """Generate an interactive HTML/JS physics-driven topology canvas using Vis.js."""
+    cmap = {
+        "ip": {"bg": "#0284C7", "border": "#38BDF8", "highlight": "#7DD3FC"},
+        "host": {"bg": "#7E22CE", "border": "#C084FC", "highlight": "#E9D5FF"},
+        "user": {"bg": "#D97706", "border": "#FBBF24", "highlight": "#FDE68A"},
+        "process": {"bg": "#BE123C", "border": "#FB7185", "highlight": "#FECDD3"},
+    }
+    
+    nodes_data = []
+    for n in sub.nodes:
+        ntype = sub.nodes[n].get("ntype", "ip")
+        is_root = (n == f"ip:{root_entity}")
+        style = cmap.get(ntype, {"bg": "#334155", "border": "#94A3B8", "highlight": "#CBD5E1"})
+        label = n.split(":", 1)[1] if ":" in n else n
+        
+        in_deg = sub.in_degree(n)
+        out_deg = sub.out_degree(n)
+        badge = ntype.upper()
+        root_tag = "<br><span style='color: #EF4444; font-weight: bold;'>🚨 TARGET INVESTIGATION SEED</span>" if is_root else ""
+        title = f"<div style='font-family: monospace; font-size: 11px; padding: 6px 10px; background: #0A0F1D; border: 1px solid #38BDF8; border-radius: 6px; color: #F8FAFC;'><b style='color: {style['border']};'>[{badge}]</b> {label}<br><span style='color: #94A3B8;'>Inbound:</span> {in_deg} | <span style='color: #94A3B8;'>Outbound:</span> {out_deg}{root_tag}</div>"
+        
+        nodes_data.append({
+            "id": n,
+            "label": label,
+            "title": title,
+            "shape": "dot",
+            "size": 28 if is_root else 16,
+            "color": {
+                "background": style["bg"],
+                "border": style["border"],
+                "highlight": {
+                    "background": style["highlight"],
+                    "border": "#FFFFFF"
+                },
+                "hover": {
+                    "background": style["highlight"],
+                    "border": "#38BDF8"
+                }
+            },
+            "borderWidth": 3 if is_root else 1.5,
+            "borderWidthSelected": 4,
+            "font": {
+                "color": "#F8FAFC",
+                "size": 11,
+                "face": "JetBrains Mono, -apple-system, sans-serif",
+                "strokeWidth": 2,
+                "strokeColor": "#070B14"
+            },
+            "shadow": {
+                "enabled": True,
+                "color": style["border"] + "66",
+                "size": 14 if is_root else 8,
+                "x": 0,
+                "y": 0
+            }
+        })
+        
+    edges_data = []
+    for u, v, d in sub.edges(data=True):
+        n_events = int(d.get("n", 1))
+        rel = d.get("rel", "communicates")
+        max_sev = d.get("max_sev", 1)
+        edge_color = "rgba(239, 68, 68, 0.75)" if max_sev >= 4 else "rgba(56, 189, 248, 0.5)"
+        
+        title = f"<div style='font-family: monospace; font-size: 11px; padding: 4px 8px; background: #0A0F1D; border: 1px solid #64748B; border-radius: 4px; color: #F8FAFC;'><b>Relation:</b> {rel}<br><b>Alerts:</b> {n_events} | <b>Max Sev:</b> {max_sev}/5</div>"
+        
+        edges_data.append({
+            "from": u,
+            "to": v,
+            "title": title,
+            "arrows": {"to": {"enabled": True, "scaleFactor": 0.65}},
+            "width": max(1.2, min(4.5, 1.2 + np.log1p(n_events))),
+            "color": {
+                "color": edge_color,
+                "highlight": "#38BDF8",
+                "hover": "#34D399"
+            },
+            "smooth": {"type": "curvedCW", "roundness": 0.15}
+        })
+
+    nodes_json = json.dumps(nodes_data)
+    edges_json = json.dumps(edges_data)
+
+    return f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css"/>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        html, body {{
+            width: 100%;
+            height: 100%;
+            background: #070B14;
+            overflow: hidden;
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+        }}
+        #graph-container {{
+            width: 100%;
+            height: {height}px;
+            background-color: #070B14;
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.06) 0%, transparent 80%),
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 32px 32px, 32px 32px;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 14px;
+            position: relative;
+        }}
+        .graph-controls {{
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }}
+        .ctrl-btn {{
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            color: #38BDF8;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: monospace;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(8px);
+        }}
+        .ctrl-btn:hover {{
+            background: rgba(56, 189, 248, 0.25);
+            border-color: #38BDF8;
+            color: #F8FAFC;
+            transform: translateY(-1px);
+        }}
+        .graph-legend {{
+            position: absolute;
+            bottom: 14px;
+            left: 14px;
+            display: flex;
+            gap: 16px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            padding: 7px 16px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            backdrop-filter: blur(8px);
+            z-index: 10;
+        }}
+        .vis-tooltip {{
+            position: absolute;
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+        }}
+    </style>
+</head>
+<body>
+    <div id="graph-container">
+        <div class="graph-controls">
+            <button class="ctrl-btn" onclick="network.fit({{animation: true}})">RESET VIEW</button>
+            <button class="ctrl-btn" onclick="togglePhysics()">FREEZE / UNFREEZE</button>
+        </div>
+        <div class="graph-legend">
+            <span style="color: #38BDF8;">● IPv4/IPv6 Entity</span>
+            <span style="color: #C084FC;">● Host Endpoint</span>
+            <span style="color: #FBBF24;">● User Account</span>
+            <span style="color: #FB7185;">● System Process</span>
+        </div>
+    </div>
+    <script type="text/javascript">
+        const nodes = new vis.DataSet({nodes_json});
+        const edges = new vis.DataSet({edges_json});
+        const container = document.getElementById('graph-container');
+        const data = {{ nodes: nodes, edges: edges }};
+        const options = {{
+            nodes: {{
+                borderWidth: 2,
+                shape: 'dot'
+            }},
+            edges: {{
+                arrows: {{ to: {{ enabled: true, scaleFactor: 0.65 }} }},
+                smooth: {{ type: 'continuous' }}
+            }},
+            physics: {{
+                solver: 'forceAtlas2Based',
+                forceAtlas2Based: {{
+                    gravitationalConstant: -75,
+                    centralGravity: 0.02,
+                    springLength: 90,
+                    springConstant: 0.08,
+                    damping: 0.45
+                }},
+                stabilization: {{
+                    enabled: true,
+                    iterations: 150,
+                    updateInterval: 25
+                }}
+            }},
+            interaction: {{
+                hover: true,
+                tooltipDelay: 40,
+                zoomView: true,
+                dragView: true,
+                multiselect: false
+            }}
+        }};
+        const network = new vis.Network(container, data, options);
+        
+        let physicsEnabled = true;
+        function togglePhysics() {{
+            physicsEnabled = !physicsEnabled;
+            network.setOptions({{ physics: {{ enabled: physicsEnabled }} }});
+        }}
+        
+        network.on("click", function (params) {{
+            if (params.nodes.length > 0) {{
+                const selectedNode = params.nodes[0];
+                const connectedNodes = network.getConnectedNodes(selectedNode);
+                connectedNodes.push(selectedNode);
+                
+                nodes.forEach(node => {{
+                    if (connectedNodes.includes(node.id)) {{
+                        nodes.update({{ id: node.id, opacity: 1.0 }});
+                    }} else {{
+                        nodes.update({{ id: node.id, opacity: 0.15 }});
+                    }}
+                }});
+            }} else {{
+                nodes.forEach(node => {{
+                    nodes.update({{ id: node.id, opacity: 1.0 }});
+                }});
+            }}
+        }});
+    </script>
+</body>
+</html>'''
+
 # Professional SOC Severity Palette
 COLORS = {
     "Critical": "#EF4444",  # Ruby Crimson
@@ -72,7 +318,7 @@ COLORS = {
 }
 ORDER = ["Critical", "High", "Medium", "Low"]
 
-# Injection of Enterprise SOC UI/UX Design System
+# Injection of Enterprise SOC UI/UX Design System with Fluid Ambient Transitions
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -86,31 +332,84 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    /* Background and Canvas */
+    /* Ambient Cyber Background with Fluid Breathing Animation */
     .stApp {
-        background-color: #070B14;
+        background-color: #060913;
+        background-image: 
+            radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.12) 0%, transparent 65%),
+            radial-gradient(circle at 85% 25%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
+            radial-gradient(circle at 15% 75%, rgba(16, 185, 129, 0.06) 0%, transparent 45%),
+            linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+        background-size: 100% 100%, 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+        background-position: 0 0, 0 0, 0 0, -1px -1px, -1px -1px;
         color: #E2E8F0;
+        animation: ambientBreath 12s ease-in-out infinite alternate;
+    }
+
+    @keyframes ambientBreath {
+        0% { background-color: #060913; }
+        50% { background-color: #070E1E; }
+        100% { background-color: #060913; }
+    }
+
+    /* Section & Graph Arise Entrance Transitions */
+    @keyframes ariseIn {
+        0% {
+            opacity: 0;
+            transform: translateY(22px) scale(0.985);
+            filter: blur(4px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+        }
+    }
+
+    .stTabs [role="tabpanel"] {
+        animation: ariseIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .arise-stagger-1 {
+        animation: ariseIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .arise-stagger-2 {
+        animation: ariseIn 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation-delay: 0.1s;
+    }
+
+    .arise-stagger-3 {
+        animation: ariseIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation-delay: 0.2s;
+    }
+
+    .arise-stagger-4 {
+        animation: ariseIn 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation-delay: 0.3s;
     }
     
     /* Top Banner / Command Header */
     .command-header {
-        background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.4) 100%);
-        border: 1px solid rgba(148, 163, 184, 0.12);
-        backdrop-filter: blur(12px);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.45) 100%);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        backdrop-filter: blur(16px);
         border-radius: 14px;
         padding: 20px 24px;
         margin-bottom: 24px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 28px -2px rgba(0, 0, 0, 0.6);
+        animation: ariseIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
     
     .brand-title {
         font-size: 1.45rem;
         font-weight: 800;
         letter-spacing: -0.02em;
-        background: linear-gradient(90deg, #F8FAFC 0%, #94A3B8 100%);
+        background: linear-gradient(90deg, #F8FAFC 0%, #38BDF8 60%, #94A3B8 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin: 0;
@@ -135,16 +434,23 @@ st.markdown("""
     .live-status-pill {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 14px;
+        gap: 9px;
+        padding: 6px 16px;
         border-radius: 20px;
         font-size: 0.75rem;
         font-weight: 700;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
         background: rgba(16, 185, 129, 0.12);
         color: #34D399;
-        border: 1px solid rgba(16, 185, 129, 0.3);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+        transition: all 0.3s ease;
+    }
+
+    .live-status-pill:hover {
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
+        border-color: #34D399;
     }
 
     .live-dot {
@@ -158,13 +464,13 @@ st.markdown("""
 
     @keyframes pulse-green {
         0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-        70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
         100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
     }
 
     .tenant-pill {
         display: inline-block;
-        padding: 6px 12px;
+        padding: 6px 14px;
         border-radius: 8px;
         font-size: 0.75rem;
         font-weight: 600;
@@ -182,18 +488,21 @@ st.markdown("""
     }
 
     .kpi-card-v2 {
-        background: #0E1626;
-        border: 1px solid rgba(148, 163, 184, 0.1);
-        border-radius: 12px;
+        background: rgba(14, 22, 38, 0.75);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-radius: 14px;
         padding: 16px 18px;
         position: relative;
         overflow: hidden;
-        transition: transform 0.2s ease, border-color 0.2s ease;
+        backdrop-filter: blur(12px);
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
     }
 
     .kpi-card-v2:hover {
-        border-color: rgba(56, 189, 248, 0.3);
-        transform: translateY(-2px);
+        border-color: rgba(56, 189, 248, 0.45);
+        transform: translateY(-4px) scale(1.015);
+        box-shadow: 0 12px 30px -5px rgba(56, 189, 248, 0.22);
     }
 
     .kpi-card-v2::before {
@@ -204,6 +513,12 @@ st.markdown("""
         right: 0;
         height: 2px;
         background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.5), transparent);
+        transition: height 0.3s ease, background 0.3s ease;
+    }
+
+    .kpi-card-v2:hover::before {
+        height: 3px;
+        background: linear-gradient(90deg, #0284C7, #38BDF8, #7DD3FC);
     }
 
     .kpi-label-v2 {
@@ -279,49 +594,57 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: rgba(30, 41, 59, 0.8);
+        background: rgba(30, 41, 59, 0.85);
         border: 1px solid rgba(56, 189, 248, 0.25);
         color: #38BDF8;
-        padding: 4px 12px;
-        border-radius: 6px;
+        padding: 5px 12px;
+        border-radius: 8px;
         font-size: 0.76rem;
         font-family: 'JetBrains Mono', monospace;
         font-weight: 600;
-        margin: 3px 4px 3px 0;
+        margin: 3px 6px 3px 0;
+        transition: all 0.25s ease;
+        cursor: default;
     }
 
-    .reason-chip.alert-chip {
-        border-color: rgba(239, 68, 68, 0.4);
-        color: #FCA5A5;
-        background: rgba(239, 68, 68, 0.1);
-    }
-
-    .reason-chip.hub-chip {
-        border-color: rgba(168, 85, 247, 0.4);
-        color: #D8B4FE;
-        background: rgba(168, 85, 247, 0.1);
+    .reason-chip:hover {
+        border-color: #38BDF8;
+        color: #F8FAFC;
+        background: rgba(56, 189, 248, 0.2);
+        transform: translateY(-1px);
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
     }
 
     /* Card Panels & Containers */
     .content-panel {
-        background: #0E1626;
-        border: 1px solid rgba(148, 163, 184, 0.1);
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
+        background: rgba(14, 22, 38, 0.65);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-radius: 14px;
+        padding: 22px;
+        margin-bottom: 22px;
+        backdrop-filter: blur(16px);
+        box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4);
+        transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        animation: ariseIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
 
-    /* Tabs Styling */
+    .content-panel:hover {
+        border-color: rgba(56, 189, 248, 0.35);
+        box-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.6), 0 0 18px -4px rgba(56, 189, 248, 0.15);
+        transform: translateY(-2px);
+    }
+
+    /* Tabs Styling with Responsive Highlighting */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
         border-bottom: 1px solid rgba(148, 163, 184, 0.15);
         padding-bottom: 4px;
-        margin-bottom: 20px;
+        margin-bottom: 24px;
     }
 
     .stTabs [data-baseweb="tab"] {
-        height: 42px;
+        height: 44px;
         background-color: transparent;
         border-radius: 8px 8px 0 0;
         color: #94A3B8;
@@ -330,12 +653,19 @@ st.markdown("""
         letter-spacing: 0.02em;
         padding: 0 18px;
         border: none;
+        transition: all 0.2s ease;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #F8FAFC;
+        background-color: rgba(255, 255, 255, 0.03);
     }
 
     .stTabs [aria-selected="true"] {
         background-color: rgba(56, 189, 248, 0.08) !important;
         color: #38BDF8 !important;
         border-bottom: 2px solid #38BDF8 !important;
+        text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
     }
 
     /* Sidebar Refinements */
@@ -484,7 +814,7 @@ col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 with col1:
     st.markdown(f"""
-    <div class="kpi-card-v2">
+    <div class="kpi-card-v2 arise-stagger-1">
         <div class="kpi-label-v2">Ingested Stream</div>
         <div class="kpi-value-v2">{total_raw:,}</div>
         <div class="kpi-sub-v2">Raw telemetry events</div>
@@ -493,7 +823,7 @@ with col1:
 
 with col2:
     st.markdown(f"""
-    <div class="kpi-card-v2">
+    <div class="kpi-card-v2 arise-stagger-2">
         <div class="kpi-label-v2">De-duplicated</div>
         <div class="kpi-value-v2" style="color: #38BDF8;">{total_dedup:,}</div>
         <div class="kpi-sub-v2" style="color: #38BDF8;">-{arr_pct:.1f}% noise suppressed</div>
@@ -502,7 +832,7 @@ with col2:
 
 with col3:
     st.markdown(f"""
-    <div class="kpi-card-v2">
+    <div class="kpi-card-v2 arise-stagger-3">
         <div class="kpi-label-v2">Critical Threats</div>
         <div class="kpi-value-v2" style="color: #EF4444;">{crit_count:,}</div>
         <div class="kpi-sub-v2" style="color: #EF4444;">Immediate isolation SLA</div>
@@ -511,7 +841,7 @@ with col3:
 
 with col4:
     st.markdown(f"""
-    <div class="kpi-card-v2">
+    <div class="kpi-card-v2 arise-stagger-2">
         <div class="kpi-label-v2">High Priority</div>
         <div class="kpi-value-v2" style="color: #F97316;">{high_count:,}</div>
         <div class="kpi-sub-v2" style="color: #F97316;">Forensic review required</div>
@@ -520,7 +850,7 @@ with col4:
 
 with col5:
     st.markdown(f"""
-    <div class="kpi-card-v2">
+    <div class="kpi-card-v2 arise-stagger-3">
         <div class="kpi-label-v2">Workload Cut</div>
         <div class="kpi-value-v2" style="color: #10B981;">{workload_reduction:.1f}%</div>
         <div class="kpi-sub-v2" style="color: #10B981;">Filtered non-actionable</div>
@@ -529,7 +859,7 @@ with col5:
 
 with col6:
     st.markdown(f"""
-    <div class="kpi-card-v2">
+    <div class="kpi-card-v2 arise-stagger-4">
         <div class="kpi-label-v2">Mean Risk Score</div>
         <div class="kpi-value-v2" style="color: #A855F7;">{avg_risk:.1f}</div>
         <div class="kpi-sub-v2">Normalized scale (0-100)</div>
@@ -552,27 +882,27 @@ with tab_over:
     r1_col1, r1_col2 = st.columns([1, 1])
 
     with r1_col1:
-        st.markdown('<div class="content-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="content-panel arise-stagger-1">', unsafe_allow_html=True)
         st.subheader("Alert Severity Distribution")
         pc = df["priority"].value_counts().reindex(ORDER).fillna(0)
         st.bar_chart(pc, color="#EF4444")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with r1_col2:
-        st.markdown('<div class="content-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="content-panel arise-stagger-2">', unsafe_allow_html=True)
         st.subheader("Risk Score Frequency Spectrum")
         hist, edges = np.histogram(df["risk_score"], bins=20, range=(0, 100))
         st.bar_chart(pd.Series(hist, index=[f"{int(e)}" for e in edges[:-1]]), color="#38BDF8")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="content-panel">', unsafe_allow_html=True)
+    st.markdown('<div class="content-panel arise-stagger-3">', unsafe_allow_html=True)
     st.subheader("Temporal Alert Ingestion Velocity (5-Minute Window)")
     t = df.set_index("timestamp").groupby([pd.Grouper(freq="5min"), "priority"]).size().unstack(fill_value=0)
     t = t.reindex(columns=[p for p in ORDER if p in t.columns])
     st.area_chart(t, color=[COLORS[p] for p in t.columns])
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="content-panel">', unsafe_allow_html=True)
+    st.markdown('<div class="content-panel arise-stagger-4">', unsafe_allow_html=True)
     st.subheader("Top Threat Originators (Critical & High Incident Volumes)")
     top = queue[queue["priority"].isin(["High", "Critical"])].groupby("src_ip").size().sort_values(ascending=False).head(10)
     st.bar_chart(top, color="#F97316")
@@ -580,6 +910,7 @@ with tab_over:
 
 # ---------------- TAB 2: ACTIVE TRIAGE QUEUE ----------------
 with tab_queue:
+    st.markdown('<div class="content-panel arise-stagger-1">', unsafe_allow_html=True)
     st.markdown("### Actionable Triage Queue")
     st.caption(f"Displaying {len(view):,} prioritized alerts sorted by descending risk score.")
 
@@ -600,8 +931,9 @@ with tab_queue:
             "signature": st.column_config.TextColumn("Attack Classification"),
         }
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown('<div class="content-panel arise-stagger-2">', unsafe_allow_html=True)
     st.markdown("### Forensic Incident Drill-Down & XAI Explainability")
 
     ids = q["alert_id"].head(300).tolist()
@@ -666,9 +998,11 @@ with tab_queue:
             with a_c3:
                 if st.button("🔇 Suppress Rule", key="btn_sup", use_container_width=True):
                     st.warning(f"Signature for {sel} marked as False Alarm baseline.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------- TAB 3: CORRELATED INCIDENTS ----------------
 with tab_inc:
+    st.markdown('<div class="content-panel arise-stagger-1">', unsafe_allow_html=True)
     st.markdown("### High-Level Security Incidents")
     st.caption("Aggregated security episodes grouped per adversary source entity and operational session window.")
 
@@ -683,9 +1017,11 @@ with tab_inc:
             "src_ip": st.column_config.TextColumn("Originating Entity"),
         }
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------- TAB 4: ENTITY PROVENANCE GRAPH ----------------
 with tab_prov:
+    st.markdown('<div class="content-panel arise-stagger-1">', unsafe_allow_html=True)
     st.markdown("### Heterogeneous Entity Provenance Topology")
     st.caption("Graph mapping communication and execution paths between IP entities, hosts, user sessions, and binaries.")
 
@@ -693,56 +1029,72 @@ with tab_prov:
     if not top_src:
         st.info("No active communication entities available in current buffer.")
     else:
-        ent = st.selectbox("Inspect Target Entity Subgraph (Ranked by Risk):", top_src)
+        ctl_c1, ctl_c2 = st.columns([1.3, 1.7])
+        with ctl_c1:
+            ent = st.selectbox("Inspect Target Entity Subgraph (Ranked by Risk):", top_src)
+        with ctl_c2:
+            render_mode = st.radio(
+                "Topology Visualization Engine",
+                ["⚡ Interactive Physics Network (Vis.js / WebGL)", "📊 Static High-Res Vector (Matplotlib)"],
+                index=0,
+                horizontal=True
+            )
+
         G = build_graph(df)
         sub = entity_subgraph(G, f"ip:{ent}", radius=2)
 
         if sub.number_of_nodes() == 0:
             st.info("No topological graph context for this entity.")
         else:
-            fig, ax = plt.subplots(figsize=(10, 6), facecolor="#070B14")
-            ax.set_facecolor("#070B14")
+            if "Interactive" in render_mode:
+                html_vis = render_interactive_vis_graph(sub, ent, height=600)
+                components.html(html_vis, height=620)
+            else:
+                fig, ax = plt.subplots(figsize=(10, 6), facecolor="#070B14")
+                ax.set_facecolor("#070B14")
 
-            pos = nx.spring_layout(sub, seed=3, k=0.9)
-            cmap = {
-                "ip": "#38BDF8",       # Cyan
-                "host": "#A855F7",     # Violet
-                "user": "#F59E0B",     # Amber
-                "process": "#F43F5E"   # Rose
-            }
+                pos = nx.spring_layout(sub, seed=3, k=0.9)
+                cmap = {
+                    "ip": "#38BDF8",       # Cyan
+                    "host": "#A855F7",     # Violet
+                    "user": "#F59E0B",     # Amber
+                    "process": "#F43F5E"   # Rose
+                }
 
-            node_colors = [cmap.get(sub.nodes[n].get("ntype"), "#94A3B8") for n in sub]
-            node_sizes = [850 if n == f"ip:{ent}" else 340 for n in sub]
+                node_colors = [cmap.get(sub.nodes[n].get("ntype"), "#94A3B8") for n in sub]
+                node_sizes = [850 if n == f"ip:{ent}" else 340 for n in sub]
 
-            nx.draw_networkx_nodes(sub, pos, node_color=node_colors, node_size=node_sizes, ax=ax, edgecolors="#1E293B", linewidths=1.5)
-            nx.draw_networkx_edges(
-                sub, pos,
-                width=[min(1.2 + np.log1p(d["n"]), 5) for _, _, d in sub.edges(data=True)],
-                edge_color="#94A3B866",
-                arrows=True,
-                arrowsize=14,
-                ax=ax
-            )
+                nx.draw_networkx_nodes(sub, pos, node_color=node_colors, node_size=node_sizes, ax=ax, edgecolors="#1E293B", linewidths=1.5)
+                nx.draw_networkx_edges(
+                    sub, pos,
+                    width=[min(1.2 + np.log1p(d["n"]), 5) for _, _, d in sub.edges(data=True)],
+                    edge_color="#94A3B866",
+                    arrows=True,
+                    arrowsize=14,
+                    ax=ax
+                )
 
-            labels = {n: n.split(":", 1)[1] for n in sub}
-            nx.draw_networkx_labels(sub, pos, labels=labels, font_size=8, font_family="sans-serif", font_color="#F8FAFC", ax=ax)
+                labels = {n: n.split(":", 1)[1] for n in sub}
+                nx.draw_networkx_labels(sub, pos, labels=labels, font_size=8, font_family="sans-serif", font_color="#F8FAFC", ax=ax)
 
-            ax.axis("off")
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close()
+                ax.axis("off")
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
 
-            st.markdown("""
-            <div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px; font-size: 0.8rem; font-weight: 600;">
-                <span style="color: #38BDF8;">● IPv4/IPv6 Entity</span>
-                <span style="color: #A855F7;">● Host Endpoint</span>
-                <span style="color: #F59E0B;">● User Account</span>
-                <span style="color: #F43F5E;">● System Process</span>
-            </div>
-            """, unsafe_allow_html=True)
+                st.markdown("""
+                <div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px; font-size: 0.8rem; font-weight: 600;">
+                    <span style="color: #38BDF8;">● IPv4/IPv6 Entity</span>
+                    <span style="color: #A855F7;">● Host Endpoint</span>
+                    <span style="color: #F59E0B;">● User Account</span>
+                    <span style="color: #F43F5E;">● System Process</span>
+                </div>
+                """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------- TAB 5: MODEL BENCHMARKS ----------------
 with tab_eval:
+    st.markdown('<div class="content-panel arise-stagger-1">', unsafe_allow_html=True)
     st.markdown("### Academic Model Verification & Baseline Benchmarking")
     st.caption("Quantitative comparative evaluation against conventional rule-based and severity-only heuristics.")
 
@@ -770,6 +1122,7 @@ with tab_eval:
 
         st.markdown("**Priority Triage Accuracy (True Threat Distribution per Tier)**")
         st.dataframe(pd.DataFrame(rep["priority_breakdown"]), use_container_width=True, hide_index=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------- REFRESH LOOP ----------------
 if auto:
