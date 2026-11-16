@@ -45,9 +45,13 @@ def inject_simulated_alerts(count: int = 150, db_target: str = "live.db") -> int
     """Generate and score simulated streaming SOC events directly into the database."""
     model_path = ROOT / "models" / "default.joblib"
     if not model_path.exists():
-        return 0
-    bundle = ModelBundle.load(model_path)
+        from alert_triage.cli import ensure_default_model, ensure_ioc_file
+        ensure_ioc_file()
+        bundle = ensure_default_model(cfg)
+    else:
+        bundle = ModelBundle.load(model_path)
     out_dir = ROOT / "output"
+    out_dir.mkdir(parents=True, exist_ok=True)
     target_store = Store(out_dir / db_target)
     engine = LiveEngine(bundle, target_store)
     gen = LiveGenerator(campaign_every_s=10, scanner_every_s=25)
@@ -695,7 +699,28 @@ st.markdown("""
 
 # ---------------- SIDEBAR CONTROLS ----------------
 out_dir = ROOT / "output"
+out_dir.mkdir(parents=True, exist_ok=True)
 dbs = sorted(out_dir.glob("*.db")) if out_dir.exists() else []
+
+if not dbs:
+    with st.spinner("Initializing Sentinel Cyber Triage Engine & Telemetry Buffer..."):
+        from alert_triage.cli import ensure_ioc_file, ensure_default_model
+        ensure_ioc_file()
+        bundle = ensure_default_model(cfg)
+        from alert_triage.realtime import LiveEngine
+        from alert_triage.store import Store
+        from alert_triage.data_gen import LiveGenerator
+        target_store = Store(out_dir / "live.db")
+        engine = LiveEngine(bundle, target_store)
+        gen = LiveGenerator(campaign_every_s=10, scanner_every_s=25)
+        now = datetime.now(UTC).replace(tzinfo=None)
+        recs = []
+        for s in range(30):
+            t = now - timedelta(seconds=(30 - s) * 4)
+            recs.extend(gen.tick(t, rate=4.0))
+        engine.process(recs[:300])
+        target_store.close()
+        dbs = sorted(out_dir.glob("*.db"))
 
 if not dbs:
     st.error("No triage telemetry found in output/. Run `python main.py demo` or `python main.py live` first.")

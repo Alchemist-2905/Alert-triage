@@ -1,0 +1,129 @@
+{
+  "n_alerts": 18000,
+  "malicious_rate": 0.11738888888888889,
+  "methods": {
+    "Severity-only (sev>=4)": {
+      "precision": 0.362629246676514,
+      "recall": 0.23237103644107904,
+      "f1": 0.28324199596192673,
+      "false_positive_rate": 0.05432114307295273,
+      "accuracy": 0.8619444444444444,
+      "tp": 491,
+      "fp": 863,
+      "fn": 1622,
+      "tn": 15024,
+      "roc_auc": 0.7197628536679914,
+      "avg_precision": 0.2557007034921386,
+      "precision@50": 1.0,
+      "precision@100": 0.82,
+      "precision@500": 0.224,
+      "analyst_queue": 1049,
+      "alert_volume_reduction": 0.9417222222222222,
+      "malicious_captured_in_queue": 0.23237103644107904
+    },
+    "Rule-only (score>=0.6)": {
+      "precision": 0.2651739191663146,
+      "recall": 0.8911500236630383,
+      "f1": 0.40872585196440203,
+      "false_positive_rate": 0.32844464027192044,
+      "accuracy": 0.6973333333333334,
+      "tp": 1883,
+      "fp": 5218,
+      "fn": 230,
+      "tn": 10669,
+      "roc_auc": 0.8469821664964561,
+      "avg_precision": 0.5665233156959169,
+      "precision@50": 0.98,
+      "precision@100": 0.99,
+      "precision@500": 0.882,
+      "analyst_queue": 5574,
+      "alert_volume_reduction": 0.6903333333333334,
+      "malicious_captured_in_queue": 0.8911500236630383
+    },
+    "ML-only (p>=0.5)": {
+      "precision": 0.9981015662078785,
+      "recall": 0.9952673923331756,
+      "f1": 0.9966824644549763,
+      "false_positive_rate": 0.0002517781834204066,
+      "accuracy": 0.9992222222222222,
+      "tp": 2103,
+      "fp": 4,
+      "fn": 10,
+      "tn": 15883,
+      "roc_auc": 0.9999888290559887,
+      "avg_precision": 0.9999188935798289,
+      "precision@50": 1.0,
+      "precision@100": 1.0,
+      "precision@500": 1.0,
+      "analyst_queue": 588,
+      "alert_volume_reduction": 0.9673333333333334,
+      "malicious_captured_in_queue": 0.9952673923331756
+    },
+    "Hybrid risk (High+Critical)": {
+      "precision": 1.0,
+      "recall": 0.8674869853289162,
+      "f1": 0.9290420679168778,
+      "false_positive_rate": 0.0,
+      "accuracy": 0.9844444444444445,
+      "tp": 1833,
+      "fp": 0,
+      "fn": 280,
+      "tn": 15887,
+      "roc_auc": 0.9999388874889628,
+      "avg_precision": 0.9996789202162513,
+      "precision@50": 1.0,
+      "precision@100": 1.0,
+      "precision@500": 1.0,
+      "analyst_queue": 454,
+      "alert_volume_reduction": 0.9747777777777777,
+      "malicious_captured_in_queue": 0.8674869853289162
+    },
+    "Hybrid risk (Medium+)": {
+      "precision": 0.9479119892231702,
+      "recall": 0.9990534784666352,
+      "f1": 0.9728110599078341,
+      "false_positive_rate": 0.007301567319191792,
+      "accuracy": 0.9934444444444445,
+      "tp": 2111,
+      "fp": 116,
+      "fn": 2,
+      "tn": 15771,
+      "roc_auc": 0.9999388874889628,
+      "avg_precision": 0.9996789202162513,
+      "precision@50": 1.0,
+      "precision@100": 1.0,
+      "precision@500": 1.0,
+      "analyst_queue": 687,
+      "alert_volume_reduction": 0.9618333333333333,
+      "malicious_captured_in_queue": 0.9990534784666352
+    }
+  },
+  "duplicates_suppressed": 1715,
+  "duplicate_rate": 0.09527777777777778,
+  "priority_breakdown": [
+    {
+      "priority": "Low",
+      "alerts": 15773,
+      "malicious": 2,
+      "malicious_rate": 0.0001
+    },
+    {
+      "priority": "Medium",
+      "alerts": 394,
+      "malicious": 278,
+      "malicious_rate": 0.7056
+    },
+    {
+      "priority": "High",
+      "alerts": 1570,
+      "malicious": 1570,
+      "malicious_rate": 1.0
+    },
+    {
+      "priority": "Critical",
+      "alerts": 263,
+      "malicious": 263,
+      "malicious_rate": 1.0
+    }
+  ]
+}

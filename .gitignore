@@ -37,16 +37,21 @@ desktop.ini
 *.bak
 *.tmp
 
-# Streamlit internal state
-.streamlit/
+# Streamlit configuration
+.streamlit/*
+!.streamlit/config.toml
 
-# Generated Pipeline Artefacts & Data Buffers (recreate with `python main.py demo`)
+# Generated Pipeline Artefacts & Data Buffers
 output/*
 !output/.gitkeep
-models/*.joblib
+!output/batch.db
+!output/live.db
+!output/batch.metrics.json
+models/*
+!models/.gitkeep
+!models/default.joblib
 data/synthetic_alerts.csv
 data/live/*.jsonl
 data/unsw/
-*.db
 *.db-wal
 *.db-shm
