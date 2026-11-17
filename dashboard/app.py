@@ -910,14 +910,15 @@ with tab_over:
         st.markdown('<div class="content-panel arise-stagger-1">', unsafe_allow_html=True)
         st.subheader("Alert Severity Distribution")
         pc = df["priority"].value_counts().reindex(ORDER).fillna(0)
-        st.bar_chart(pc, color="#EF4444")
+        st.bar_chart(pc, color="#EF4444", sort=False)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with r1_col2:
         st.markdown('<div class="content-panel arise-stagger-2">', unsafe_allow_html=True)
         st.subheader("Risk Score Frequency Spectrum")
         hist, edges = np.histogram(df["risk_score"], bins=20, range=(0, 100))
-        st.bar_chart(pd.Series(hist, index=[f"{int(e)}" for e in edges[:-1]]), color="#38BDF8")
+        bin_labels = [f"{int(e):02d}-{int(edges[i+1]):02d}" for i, e in enumerate(edges[:-1])]
+        st.bar_chart(pd.Series(hist, index=bin_labels), color="#38BDF8", sort=False)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="content-panel arise-stagger-3">', unsafe_allow_html=True)
@@ -930,7 +931,7 @@ with tab_over:
     st.markdown('<div class="content-panel arise-stagger-4">', unsafe_allow_html=True)
     st.subheader("Top Threat Originators (Critical & High Incident Volumes)")
     top = queue[queue["priority"].isin(["High", "Critical"])].groupby("src_ip").size().sort_values(ascending=False).head(10)
-    st.bar_chart(top, color="#F97316")
+    st.bar_chart(top, color="#F97316", sort=False)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------- TAB 2: ACTIVE TRIAGE QUEUE ----------------
@@ -1143,7 +1144,7 @@ with tab_eval:
         st.dataframe(t.style.format("{:.3f}"), use_container_width=True)
 
         st.markdown("**Metric Comparison Across Triage Architectures**")
-        st.bar_chart(t[["Precision", "Recall (Detection Rate)", "F1-Score"]])
+        st.bar_chart(t[["Precision", "Recall (Detection Rate)", "F1-Score"]], sort=False)
 
         st.markdown("**Priority Triage Accuracy (True Threat Distribution per Tier)**")
         st.dataframe(pd.DataFrame(rep["priority_breakdown"]), use_container_width=True, hide_index=True)
